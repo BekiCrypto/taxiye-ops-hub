@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Car, Users, Wallet, FileText, TrendingUp } from 'lucide-react';
+import { Car, Users, Wallet, FileText, TrendingUp, Bell } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import Layout from '@/components/Layout';
 import KPICard from '@/components/KPICard';
