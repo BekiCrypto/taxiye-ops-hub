@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Phone, 
@@ -31,7 +32,7 @@ interface CallCenterUser {
   is_active: boolean;
   user_id: string;
   created_at: string;
-  updated_at?: string;
+  updated_at: string;
 }
 
 interface CallCenterDashboardProps {

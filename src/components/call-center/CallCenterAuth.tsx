@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +17,7 @@ interface CallCenterUser {
   is_active: boolean;
   user_id: string;
   created_at: string;
-  updated_at?: string;
+  updated_at: string;
 }
 
 interface CallCenterAuthProps {
@@ -67,11 +68,12 @@ const CallCenterAuth = ({ onLogin }: CallCenterAuthProps) => {
       // Store in localStorage for session persistence
       localStorage.setItem('call_center_user', JSON.stringify(callCenterUser));
       
-      // Ensure user_id and created_at are present for the interface
+      // Ensure user_id, created_at, and updated_at are present for the interface
       const userWithId = {
         ...callCenterUser,
         user_id: callCenterUser.id,
-        created_at: callCenterUser.created_at || new Date().toISOString()
+        created_at: callCenterUser.created_at || new Date().toISOString(),
+        updated_at: callCenterUser.updated_at || new Date().toISOString()
       };
       
       onLogin(userWithId);

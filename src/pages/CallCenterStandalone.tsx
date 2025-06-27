@@ -11,7 +11,7 @@ interface CallCenterUser {
   is_active: boolean;
   user_id: string;
   created_at: string;
-  updated_at?: string;
+  updated_at: string;
 }
 
 const CallCenterStandalone = () => {
@@ -24,11 +24,12 @@ const CallCenterStandalone = () => {
     if (savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser);
-        // Ensure user_id and created_at are present
+        // Ensure user_id, created_at, and updated_at are present
         const userWithId = {
           ...parsedUser,
           user_id: parsedUser.user_id || parsedUser.id,
-          created_at: parsedUser.created_at || new Date().toISOString()
+          created_at: parsedUser.created_at || new Date().toISOString(),
+          updated_at: parsedUser.updated_at || new Date().toISOString()
         };
         setUser(userWithId);
       } catch (error) {
