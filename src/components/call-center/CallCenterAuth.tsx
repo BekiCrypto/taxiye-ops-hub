@@ -15,6 +15,9 @@ interface CallCenterUser {
   name: string;
   role: 'agent' | 'supervisor' | 'admin';
   is_active: boolean;
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface CallCenterAuthProps {
