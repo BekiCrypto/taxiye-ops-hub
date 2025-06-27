@@ -9,6 +9,9 @@ interface CallCenterUser {
   name: string;
   role: 'agent' | 'supervisor' | 'admin';
   is_active: boolean;
+  user_id: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const CallCenterStandalone = () => {
@@ -21,7 +24,12 @@ const CallCenterStandalone = () => {
     if (savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser);
-        setUser(parsedUser);
+        // Ensure user_id is present
+        const userWithId = {
+          ...parsedUser,
+          user_id: parsedUser.user_id || parsedUser.id
+        };
+        setUser(userWithId);
       } catch (error) {
         console.error('Error parsing saved user:', error);
         localStorage.removeItem('call_center_user');

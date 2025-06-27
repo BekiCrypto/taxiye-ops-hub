@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Phone, 
@@ -30,7 +29,7 @@ interface CallCenterUser {
   name: string;
   role: 'agent' | 'supervisor' | 'admin';
   is_active: boolean;
-  user_id?: string;
+  user_id: string;
   created_at?: string;
   updated_at?: string;
 }

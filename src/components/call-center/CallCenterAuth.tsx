@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +14,7 @@ interface CallCenterUser {
   name: string;
   role: 'agent' | 'supervisor' | 'admin';
   is_active: boolean;
-  user_id?: string;
+  user_id: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -68,7 +67,13 @@ const CallCenterAuth = ({ onLogin }: CallCenterAuthProps) => {
       // Store in localStorage for session persistence
       localStorage.setItem('call_center_user', JSON.stringify(callCenterUser));
       
-      onLogin(callCenterUser);
+      // Ensure user_id is present for the interface
+      const userWithId = {
+        ...callCenterUser,
+        user_id: callCenterUser.id // Use the id as user_id if not present
+      };
+      
+      onLogin(userWithId);
       toast({
         title: 'Login Successful',
         description: `Welcome back, ${callCenterUser.name}!`
