@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import LiveMap from "./pages/LiveMap";
+import CallCenter from "./pages/CallCenter";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,8 +37,12 @@ const App = () => (
               <LiveMap />
             </ProtectedRoute>
           } />
+          <Route path="/call-center" element={
+            <ProtectedRoute>
+              <CallCenter />
+            </ProtectedRoute>
+          } />
           {/* Placeholder routes for future pages */}
-          <Route path="/call-center" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Call Center - Coming Soon</h1></div></ProtectedRoute>} />
           <Route path="/drivers" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Drivers Management - Coming Soon</h1></div></ProtectedRoute>} />
           <Route path="/passengers" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Passengers Management - Coming Soon</h1></div></ProtectedRoute>} />
           <Route path="/trips" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Trip Monitoring - Coming Soon</h1></div></ProtectedRoute>} />
