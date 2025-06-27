@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import LiveMap from "./pages/LiveMap";
 import CallCenter from "./pages/CallCenter";
+import CallCenterStandalone from "./pages/CallCenterStandalone";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,9 @@ const App = () => (
               <CallCenter />
             </ProtectedRoute>
           } />
+          {/* Standalone Call Center Route */}
+          <Route path="/support-agent" element={<CallCenterStandalone />} />
+          
           {/* Placeholder routes for future pages */}
           <Route path="/drivers" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Drivers Management - Coming Soon</h1></div></ProtectedRoute>} />
           <Route path="/passengers" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Passengers Management - Coming Soon</h1></div></ProtectedRoute>} />

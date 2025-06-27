@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { MessageSquare, AlertTriangle, Clock, User, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,7 +23,9 @@ const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
         .select(`
           *,
           rides(pickup_location, dropoff_location),
-          drivers(name, phone)
+          drivers(name, phone),
+          call_center_users!assigned_agent_id(name, email),
+          ticket_responses(*)
         `)
         .order('created_at', { ascending: false });
 
@@ -38,30 +39,21 @@ const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
         customerName: ticket.drivers?.name || 'Unknown Customer',
         phone: ticket.drivers?.phone || 'N/A',
         subject: ticket.subject,
-        category: determineCategoryFromSubject(ticket.subject),
-        priority: ticket.status === 'open' ? 'high' : 'normal',
+        category: ticket.category || 'general',
+        priority: ticket.priority || 'normal',
         status: ticket.status || 'open',
         createdAt: calculateTimeAgo(ticket.created_at),
         lastResponse: calculateTimeAgo(ticket.updated_at),
         rideId: ticket.ride_id || 'N/A',
         message: ticket.message,
         pickup: ticket.rides?.pickup_location,
-        destination: ticket.rides?.dropoff_location
+        destination: ticket.rides?.dropoff_location,
+        assignedAgent: ticket.call_center_users?.name,
+        responses: ticket.ticket_responses || []
       })) || [];
     },
     refetchInterval: 30000 // Refresh every 30 seconds
   });
-
-  const determineCategoryFromSubject = (subject: string) => {
-    const lowerSubject = subject.toLowerCase();
-    if (lowerSubject.includes('payment') || lowerSubject.includes('billing') || lowerSubject.includes('money')) {
-      return 'billing';
-    }
-    if (lowerSubject.includes('app') || lowerSubject.includes('technical') || lowerSubject.includes('bug')) {
-      return 'technical';
-    }
-    return 'complaint';
-  };
 
   const calculateTimeAgo = (dateStr: string) => {
     if (!dateStr) return 'N/A';
@@ -96,17 +88,29 @@ const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
     if (!responseText.trim()) return;
 
     try {
-      // In a real app, you'd store responses in a separate table
-      // For now, we'll just update the ticket status
-      const { error } = await supabase
+      // Add response to ticket_responses table
+      const { error: responseError } = await supabase
+        .from('ticket_responses')
+        .insert({
+          ticket_id: ticketId,
+          sender_type: 'agent',
+          message: responseText,
+          is_internal: false
+        });
+
+      if (responseError) throw responseError;
+
+      // Update ticket status
+      const { error: updateError } = await supabase
         .from('support_tickets')
         .update({ 
           status: 'in_progress',
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          first_response_at: new Date().toISOString()
         })
         .eq('id', ticketId);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
       
       setResponseText('');
       refetch();
@@ -251,6 +255,28 @@ const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
                     <div className="text-sm text-gray-600 space-y-1">
                       <p>From: {selectedTicketData.pickup}</p>
                       <p>To: {selectedTicketData.destination}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Show conversation history */}
+                {selectedTicketData.responses && selectedTicketData.responses.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-2">Conversation History</h4>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {selectedTicketData.responses.map((response: any, index: number) => (
+                        <div key={index} className="text-sm p-2 rounded bg-gray-50">
+                          <div className="flex justify-between items-start">
+                            <span className="font-medium">
+                              {response.sender_type === 'agent' ? 'Agent' : 'Customer'}:
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {calculateTimeAgo(response.created_at)}
+                            </span>
+                          </div>
+                          <p className="mt-1">{response.message}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
