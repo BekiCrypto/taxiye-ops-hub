@@ -1,15 +1,27 @@
 
 import React, { useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, LogOut } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 import Sidebar from './Sidebar';
 
 interface LayoutProps {
   children: React.ReactNode;
-  userRole?: string;
 }
 
-const Layout = ({ children, userRole = 'super_admin' }: LayoutProps) => {
+const Layout = ({ children }: LayoutProps) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const { adminProfile, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
+
+  const userRole = adminProfile?.role || 'operations_staff';
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -35,6 +47,24 @@ const Layout = ({ children, userRole = 'super_admin' }: LayoutProps) => {
                   day: 'numeric' 
                 })}
               </div>
+              
+              {adminProfile && (
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-900">{adminProfile.name}</p>
+                    <p className="text-xs text-gray-500 capitalize">{adminProfile.role.replace('_', ' ')}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSignOut}
+                    className="flex items-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </header>

@@ -1,34 +1,50 @@
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Car, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Car, Mail, Lock, AlertCircle, UserPlus } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
+  const [isSignUp, setIsSignUp] = useState(false);
+  const { signIn, signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    // Mock authentication - in real app, use Supabase Auth
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      if (email === 'admin@taxiye.com' && password === 'admin123') {
-        localStorage.setItem('admin_token', 'mock_token');
-        localStorage.setItem('admin_role', 'super_admin');
-        navigate('/dashboard');
+      let result;
+      if (isSignUp) {
+        if (!name.trim()) {
+          setError('Name is required for registration');
+          return;
+        }
+        result = await signUp(email, password, name);
       } else {
-        setError('Invalid email or password');
+        result = await signIn(email, password);
+      }
+
+      if (result.error) {
+        if (result.error.message.includes('Invalid login credentials')) {
+          setError('Invalid email or password');
+        } else if (result.error.message.includes('User already registered')) {
+          setError('An account with this email already exists. Please sign in instead.');
+        } else {
+          setError(result.error.message);
+        }
+      } else if (isSignUp) {
+        setError('Registration successful! Please check your email to confirm your account, then sign in.');
+        setIsSignUp(false);
       }
     } catch (err) {
-      setError('Login failed. Please try again.');
+      console.error('Auth error:', err);
+      setError('Authentication failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -43,16 +59,38 @@ const Login = () => {
             <Car className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Taxiye Admin</h1>
-          <p className="text-gray-600 mt-2">Sign in to your admin portal</p>
+          <p className="text-gray-600 mt-2">
+            {isSignUp ? 'Create your admin account' : 'Sign in to your admin portal'}
+          </p>
         </div>
 
-        {/* Login Form */}
+        {/* Login/Signup Form */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
                 <AlertCircle className="w-5 h-5 text-red-600" />
                 <span className="text-red-700 text-sm">{error}</span>
+              </div>
+            )}
+
+            {isSignUp && (
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                  Full Name
+                </label>
+                <div className="relative">
+                  <UserPlus className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Enter your full name"
+                    required={isSignUp}
+                  />
+                </div>
               </div>
             )}
 
@@ -88,35 +126,55 @@ const Login = () => {
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                   placeholder="Enter your password"
                   required
+                  minLength={6}
                 />
               </div>
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
             >
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
-                'Sign In'
+                isSignUp ? 'Create Account' : 'Sign In'
               )}
-            </button>
+            </Button>
           </form>
 
-          {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Demo Credentials:</h4>
-            <p className="text-xs text-gray-600">Email: admin@taxiye.com</p>
-            <p className="text-xs text-gray-600">Password: admin123</p>
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError('');
+              }}
+              className="text-blue-600 hover:text-blue-700 font-medium"
+            >
+              {isSignUp 
+                ? 'Already have an account? Sign in' 
+                : "Don't have an account? Register"
+              }
+            </button>
           </div>
+
+          {/* Demo Info */}
+          {!isSignUp && (
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">First Time Setup:</h4>
+              <p className="text-xs text-gray-600">
+                Register a new admin account or contact your system administrator for access.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-sm text-gray-600">
-            Taxiye Admin Portal v1.0
+            Taxiye Admin Portal v2.0
           </p>
         </div>
       </div>
