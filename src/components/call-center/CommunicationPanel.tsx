@@ -91,7 +91,7 @@ const CommunicationPanel = ({ user }: CommunicationPanelProps) => {
                           <Badge variant="outline">{channel.status}</Badge>
                         </div>
                         <p className="text-sm text-gray-600">
-                          Customer: {channel.drivers?.name || 'Unknown'}
+                          Customer: {Array.isArray(channel.drivers) && channel.drivers.length > 0 ? channel.drivers[0].name : 'Unknown'}
                         </p>
                         {channel.rides && (
                           <p className="text-xs text-gray-500">
@@ -131,7 +131,7 @@ const CommunicationPanel = ({ user }: CommunicationPanelProps) => {
                         </Badge>
                       </div>
                       <p className="text-sm text-gray-600">
-                        Customer: {channel.drivers?.name || 'Unknown'}
+                        Customer: {Array.isArray(channel.drivers) && channel.drivers.length > 0 ? channel.drivers[0].name : 'Unknown'}
                       </p>
                       <p className="text-xs text-gray-500">
                         Started: {new Date(channel.started_at).toLocaleString()}
