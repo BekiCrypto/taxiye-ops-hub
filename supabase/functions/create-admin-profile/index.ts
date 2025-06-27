@@ -28,29 +28,92 @@ serve(async (req) => {
       )
     }
 
-    // Create admin profile
-    const { data, error } = await supabaseClient
+    // First check if admin profile already exists
+    const { data: existingProfile, error: checkError } = await supabaseClient
       .from('admin_profiles')
-      .insert({
-        user_id,
-        email,
-        name,
-        role,
-        is_active: true
-      })
-      .select()
-      .single()
+      .select('*')
+      .eq('user_id', user_id)
+      .maybeSingle()
 
-    if (error) {
-      console.error('Error creating admin profile:', error)
+    if (checkError) {
+      console.error('Error checking existing profile:', checkError)
       return new Response(
-        JSON.stringify({ error: error.message }),
+        JSON.stringify({ error: checkError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
+    // If profile exists, return it
+    if (existingProfile) {
+      return new Response(
+        JSON.stringify({ data: existingProfile }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Check if there's a pre-created profile for this email (for root admin setup)
+    const { data: emailProfile, error: emailError } = await supabaseClient
+      .from('admin_profiles')
+      .select('*')
+      .eq('email', email)
+      .is('user_id', null)
+      .maybeSingle()
+
+    if (emailError) {
+      console.error('Error checking email profile:', emailError)
+    }
+
+    let finalData;
+
+    if (emailProfile) {
+      // Update the existing email profile with user_id
+      const { data, error } = await supabaseClient
+        .from('admin_profiles')
+        .update({
+          user_id,
+          name,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', emailProfile.id)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error updating admin profile:', error)
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      finalData = data
+    } else {
+      // Create new admin profile
+      const { data, error } = await supabaseClient
+        .from('admin_profiles')
+        .insert({
+          user_id,
+          email,
+          name,
+          role,
+          is_active: true
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error creating admin profile:', error)
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      finalData = data
+    }
+
     return new Response(
-      JSON.stringify({ data }),
+      JSON.stringify({ data: finalData }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
