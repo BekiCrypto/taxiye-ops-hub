@@ -1,11 +1,13 @@
 
 import React, { useState } from 'react';
-import { Users, Plus, Settings, TrendingUp, Shield, UserCheck, UserX } from 'lucide-react';
+import { Users, Shield, Settings, UserPlus, Activity } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
@@ -23,13 +25,14 @@ interface AdminPanelProps {
 }
 
 const AdminPanel = ({ user }: AdminPanelProps) => {
+  const [activeTab, setActiveTab] = useState('users');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserRole, setNewUserRole] = useState<'agent' | 'supervisor' | 'admin'>('agent');
   const { toast } = useToast();
 
   // Fetch all call center users
-  const { data: callCenterUsers = [], refetch } = useQuery({
+  const { data: users = [], refetch: refetchUsers } = useQuery({
     queryKey: ['call-center-users'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -46,45 +49,26 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
     }
   });
 
-  // Fetch system analytics
-  const { data: analytics } = useQuery({
-    queryKey: ['call-center-analytics'],
+  // Fetch activity logs
+  const { data: activityLogs = [] } = useQuery({
+    queryKey: ['activity-logs'],
     queryFn: async () => {
-      const [
-        { data: totalTickets },
-        { data: resolvedTickets },
-        { data: totalCalls },
-        { data: avgResponseTime }
-      ] = await Promise.all([
-        supabase.from('support_tickets').select('id', { count: 'exact' }),
-        supabase.from('support_tickets').select('id', { count: 'exact' }).eq('status', 'resolved'),
-        supabase.from('communication_channels').select('id', { count: 'exact' }),
-        supabase.from('support_tickets')
-          .select('created_at, first_response_at')
-          .not('first_response_at', 'is', null)
-      ]);
+      const { data, error } = await supabase
+        .from('agent_activity_logs')
+        .select(`
+          *,
+          call_center_users!agent_id(name, email)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(50);
 
-      // Calculate average response time
-      let avgMinutes = 0;
-      if (avgResponseTime && avgResponseTime.length > 0) {
-        const totalMinutes = avgResponseTime.reduce((sum, ticket) => {
-          const created = new Date(ticket.created_at);
-          const responded = new Date(ticket.first_response_at);
-          return sum + Math.floor((responded.getTime() - created.getTime()) / (1000 * 60));
-        }, 0);
-        avgMinutes = Math.floor(totalMinutes / avgResponseTime.length);
+      if (error) {
+        console.error('Error fetching activity logs:', error);
+        return [];
       }
 
-      return {
-        totalTickets: totalTickets?.length || 0,
-        resolvedTickets: resolvedTickets?.length || 0,
-        totalCalls: totalCalls?.length || 0,
-        avgResponseTimeMinutes: avgMinutes,
-        resolutionRate: totalTickets?.length ? 
-          Math.round((resolvedTickets?.length || 0) / totalTickets.length * 100) : 0
-      };
-    },
-    refetchInterval: 60000 // Refresh every minute
+      return data || [];
+    }
   });
 
   const handleCreateUser = async () => {
@@ -104,8 +88,7 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
           email: newUserEmail,
           name: newUserName,
           role: newUserRole,
-          created_by: user.id,
-          is_active: true
+          created_by: user.id
         });
 
       if (error) throw error;
@@ -118,12 +101,12 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
       setNewUserEmail('');
       setNewUserName('');
       setNewUserRole('agent');
-      refetch();
+      refetchUsers();
     } catch (error) {
       console.error('Error creating user:', error);
       toast({
         title: 'Error',
-        description: 'Failed to create user. Email might already exist.',
+        description: 'Failed to create user.',
         variant: 'destructive'
       });
     }
@@ -143,7 +126,7 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
         description: `User has been ${!currentStatus ? 'activated' : 'deactivated'}.`
       });
 
-      refetch();
+      refetchUsers();
     } catch (error) {
       console.error('Error updating user:', error);
       toast({
@@ -154,7 +137,7 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
     }
   };
 
-  const getRoleColor = (role: string) => {
+  const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin': return 'bg-red-100 text-red-800';
       case 'supervisor': return 'bg-blue-100 text-blue-800';
@@ -163,260 +146,161 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
   return (
     <div className="space-y-6">
-      {/* Analytics Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tickets</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analytics?.totalTickets || 0}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Resolution Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{analytics?.resolutionRate || 0}%</div>
-            <p className="text-xs text-muted-foreground">Tickets resolved</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Response Time</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {analytics?.avgResponseTimeMinutes || 0}m
-            </div>
-            <p className="text-xs text-muted-foreground">Average first response</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{callCenterUsers.length}</div>
-            <p className="text-xs text-muted-foreground">Call center staff</p>
-          </CardContent>
-        </Card>
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold">Admin Panel</h2>
+        <Badge variant="outline">
+          Total Users: {users.length}
+        </Badge>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* User Management */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            User Management
-          </h2>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="users">User Management</TabsTrigger>
+          <TabsTrigger value="activity">Activity Logs</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
 
-          {/* Add New User */}
+        <TabsContent value="users" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Plus className="w-4 h-4" />
+              <CardTitle className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5" />
                 Add New User
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-sm font-medium">Name</label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
-                    placeholder="Full name"
-                    value={newUserName}
-                    onChange={(e) => setNewUserName(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Email</label>
-                  <Input
+                    id="email"
                     type="email"
-                    placeholder="user@company.com"
                     value={newUserEmail}
                     onChange={(e) => setNewUserEmail(e.target.value)}
+                    placeholder="user@company.com"
                   />
                 </div>
+                <div>
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    value={newUserName}
+                    onChange={(e) => setNewUserName(e.target.value)}
+                    placeholder="John Doe"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="role">Role</Label>
+                  <Select value={newUserRole} onValueChange={(value: 'agent' | 'supervisor' | 'admin') => setNewUserRole(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="agent">Agent</SelectItem>
+                      <SelectItem value="supervisor">Supervisor</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium">Role</label>
-                <Select value={newUserRole} onValueChange={(value: 'agent' | 'supervisor' | 'admin') => setNewUserRole(value)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="agent">Agent</SelectItem>
-                    <SelectItem value="supervisor">Supervisor</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleCreateUser} className="w-full">
-                <Plus className="w-4 h-4 mr-2" />
+              <Button onClick={handleCreateUser}>
+                <UserPlus className="w-4 h-4 mr-2" />
                 Create User
               </Button>
             </CardContent>
           </Card>
 
-          {/* Existing Users */}
           <Card>
             <CardHeader>
-              <CardTitle>Existing Users ({callCenterUsers.length})</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Existing Users
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {callCenterUsers.map((ccUser) => (
-                  <div key={ccUser.id} className="flex items-center justify-between p-3 border rounded">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <div>
-                          <p className="font-medium">{ccUser.name}</p>
-                          <p className="text-sm text-gray-600">{ccUser.email}</p>
-                        </div>
-                        <Badge className={getRoleColor(ccUser.role)}>
-                          {ccUser.role}
+                {users.map((callCenterUser) => (
+                  <div key={callCenterUser.id} className="flex justify-between items-center p-3 border rounded">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{callCenterUser.name}</span>
+                        <Badge className={getRoleBadgeColor(callCenterUser.role)}>
+                          {callCenterUser.role}
                         </Badge>
-                        <Badge variant={ccUser.is_active ? "default" : "secondary"}>
-                          {ccUser.is_active ? 'Active' : 'Inactive'}
+                        <Badge variant={callCenterUser.is_active ? 'default' : 'secondary'}>
+                          {callCenterUser.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Created: {formatDate(ccUser.created_at)}
-                        {ccUser.last_login && ` • Last login: ${formatDate(ccUser.last_login)}`}
-                      </p>
+                      <p className="text-sm text-gray-600">{callCenterUser.email}</p>
+                      {callCenterUser.last_login && (
+                        <p className="text-xs text-gray-500">
+                          Last login: {new Date(callCenterUser.last_login).toLocaleString()}
+                        </p>
+                      )}
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleToggleUserStatus(ccUser.id, ccUser.is_active)}
-                      >
-                        {ccUser.is_active ? (
-                          <UserX className="w-4 h-4" />
-                        ) : (
-                          <UserCheck className="w-4 h-4" />
-                        )}
-                      </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleToggleUserStatus(callCenterUser.id, callCenterUser.is_active)}
+                    >
+                      {callCenterUser.is_active ? 'Deactivate' : 'Activate'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="activity" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="w-5 h-5" />
+                Recent Activity
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {activityLogs.map((log) => (
+                  <div key={log.id} className="flex justify-between items-start p-3 border rounded">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">
+                          {log.call_center_users?.name || 'Unknown User'}
+                        </span>
+                        <Badge variant="outline">{log.activity_type}</Badge>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        {log.call_center_users?.email || 'Unknown Email'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(log.created_at).toLocaleString()}
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
-        </div>
+        </TabsContent>
 
-        {/* System Settings */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Settings className="w-5 h-5" />
-            System Settings
-          </h2>
-
+        <TabsContent value="settings" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Shield className="w-4 h-4" />
-                Security & Compliance
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                System Settings
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">Call Recording</p>
-                  <p className="text-sm text-gray-600">Enable automatic call recording</p>
-                </div>
-                <Button variant="outline" size="sm">Configure</Button>
-              </div>
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">Data Encryption</p>
-                  <p className="text-sm text-gray-600">Encrypt sensitive customer data</p>
-                </div>
-                <Badge className="bg-green-100 text-green-800">Enabled</Badge>
-              </div>
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">Audit Logs</p>
-                  <p className="text-sm text-gray-600">Track all system activities</p>
-                </div>
-                <Badge className="bg-green-100 text-green-800">Active</Badge>
-              </div>
+            <CardContent>
+              <p className="text-gray-600">System settings configuration will be implemented here.</p>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Integration Settings</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">Twilio Integration</p>
-                  <p className="text-sm text-gray-600">Voice call services</p>
-                </div>
-                <Button variant="outline" size="sm">Setup</Button>
-              </div>
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">WhatsApp Bot</p>
-                  <p className="text-sm text-gray-600">Automated customer support</p>
-                </div>
-                <Button variant="outline" size="sm">Configure</Button>
-              </div>
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="font-medium">Email Gateway</p>
-                  <p className="text-sm text-gray-600">Email support integration</p>
-                </div>
-                <Button variant="outline" size="sm">Setup</Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Performance Monitoring</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {callCenterUsers.filter(u => u.is_active).length}
-                  </div>
-                  <p className="text-sm text-gray-600">Active Agents</p>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">98%</div>
-                  <p className="text-sm text-gray-600">System Uptime</p>
-                </div>
-              </div>
-              <Button variant="outline" className="w-full">
-                View Detailed Analytics
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
