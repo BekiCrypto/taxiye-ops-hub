@@ -34,21 +34,26 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
   const [newUserRole, setNewUserRole] = useState<'operations_staff' | 'supervisor' | 'root_admin'>('operations_staff');
   const { toast } = useToast();
 
-  // Fetch all admin profiles
+  // Fetch admin profiles using the edge function
   const { data: adminProfiles = [], refetch: refetchAdminProfiles } = useQuery({
     queryKey: ['admin-profiles'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('admin_profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      console.log('Fetching admin profiles...');
+      try {
+        const { data, error } = await supabase.functions.invoke('create-admin-profile', {
+          body: { action: 'list' }
+        });
 
-      if (error) {
-        console.error('Error fetching admin profiles:', error);
+        if (error) {
+          console.error('Error fetching admin profiles:', error);
+          return [];
+        }
+
+        return data?.profiles || [];
+      } catch (error) {
+        console.error('Error in admin profiles query:', error);
         return [];
       }
-
-      return data || [];
     }
   });
 
@@ -113,16 +118,21 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
     }
 
     try {
-      const { error } = await supabase
-        .from('admin_profiles')
-        .insert({
+      console.log('Creating admin user:', { email: newUserEmail, name: newUserName, role: newUserRole });
+      
+      const { data, error } = await supabase.functions.invoke('create-admin-profile', {
+        body: {
+          action: 'create',
           email: newUserEmail,
           name: newUserName,
-          role: newUserRole,
-          is_active: true
-        });
+          role: newUserRole
+        }
+      });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating admin user:', error);
+        throw error;
+      }
 
       toast({
         title: 'Admin User Created',
@@ -155,12 +165,20 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
     }
 
     try {
-      const { error } = await supabase
-        .from('admin_profiles')
-        .update({ is_active: !currentStatus, updated_at: new Date().toISOString() })
-        .eq('id', adminId);
+      console.log('Toggling admin status:', { adminId, currentStatus });
+      
+      const { data, error } = await supabase.functions.invoke('create-admin-profile', {
+        body: {
+          action: 'toggle_status',
+          admin_id: adminId,
+          is_active: !currentStatus
+        }
+      });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating admin status:', error);
+        throw error;
+      }
 
       toast({
         title: 'Admin Updated',
@@ -183,6 +201,8 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
       case 'root_admin': return 'bg-purple-100 text-purple-800';
       case 'supervisor': return 'bg-blue-100 text-blue-800';
       case 'operations_staff': return 'bg-green-100 text-green-800';
+      case 'admin': return 'bg-red-100 text-red-800';
+      case 'agent': return 'bg-yellow-100 text-yellow-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -280,7 +300,7 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {adminProfiles.map((admin) => (
+                {adminProfiles.map((admin: AdminProfile) => (
                   <div key={admin.id} className="flex justify-between items-center p-3 border rounded">
                     <div>
                       <div className="flex items-center gap-2">

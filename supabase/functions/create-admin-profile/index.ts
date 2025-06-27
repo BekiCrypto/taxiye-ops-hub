@@ -19,8 +19,99 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { user_id, email, name, role = 'operations_staff' } = await req.json()
+    const requestBody = await req.json()
+    const { action, user_id, email, name, role = 'operations_staff', admin_id, is_active } = requestBody
 
+    // Handle different actions
+    if (action === 'list') {
+      // List all admin profiles
+      const { data: profiles, error } = await supabaseClient
+        .from('admin_profiles')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching admin profiles:', error)
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      return new Response(
+        JSON.stringify({ profiles }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (action === 'create') {
+      // Create a new admin profile (pre-created, waiting for user registration)
+      if (!email || !name) {
+        return new Response(
+          JSON.stringify({ error: 'Missing required fields: email, name' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const { data, error } = await supabaseClient
+        .from('admin_profiles')
+        .insert({
+          email,
+          name,
+          role,
+          is_active: true
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error creating admin profile:', error)
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      return new Response(
+        JSON.stringify({ data }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (action === 'toggle_status') {
+      // Toggle admin status
+      if (!admin_id) {
+        return new Response(
+          JSON.stringify({ error: 'Missing admin_id' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const { data, error } = await supabaseClient
+        .from('admin_profiles')
+        .update({
+          is_active,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', admin_id)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error updating admin status:', error)
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      return new Response(
+        JSON.stringify({ data }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Default behavior - create/update admin profile on user login
     if (!user_id || !email || !name) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: user_id, email, name' }),
