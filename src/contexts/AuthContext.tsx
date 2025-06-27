@@ -49,30 +49,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (session?.user) {
           setTimeout(async () => {
             try {
-              const { data: profile } = await supabase
-                .from('admin_profiles')
-                .select('*')
-                .eq('user_id', session.user.id)
-                .maybeSingle();
-              
-              if (profile) {
-                setAdminProfile(profile);
-              } else {
-                // If no profile exists, create one (for existing users)
-                const name = session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Admin User';
-                
-                const { data } = await supabase.functions.invoke('create-admin-profile', {
-                  body: {
-                    user_id: session.user.id,
-                    email: session.user.email,
-                    name: name,
-                    role: 'operations_staff'
-                  }
-                });
-                
-                if (data?.data) {
-                  setAdminProfile(data.data);
+              // Use the edge function to get/create admin profile
+              const { data, error } = await supabase.functions.invoke('create-admin-profile', {
+                body: {
+                  user_id: session.user.id,
+                  email: session.user.email,
+                  name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Admin User',
+                  role: 'operations_staff'
                 }
+              });
+              
+              if (!error && data?.data) {
+                setAdminProfile(data.data);
+              } else {
+                console.error('Error fetching admin profile:', error);
+                setAdminProfile(null);
               }
             } catch (error) {
               console.error('Error fetching/creating admin profile:', error);
