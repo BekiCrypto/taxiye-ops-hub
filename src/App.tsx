@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,6 +9,12 @@ import Dashboard from "./pages/Dashboard";
 import LiveMap from "./pages/LiveMap";
 import CallCenter from "./pages/CallCenter";
 import CallCenterStandalone from "./pages/CallCenterStandalone";
+import DriversManagement from "./pages/DriversManagement";
+import PassengersManagement from "./pages/PassengersManagement";
+import TripMonitoring from "./pages/TripMonitoring";
+import WalletTransactions from "./pages/WalletTransactions";
+import NotificationsManagement from "./pages/NotificationsManagement";
+import SupportTickets from "./pages/SupportTickets";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -58,13 +63,39 @@ const AppRoutes = () => {
       {/* Standalone Call Center Route */}
       <Route path="/support-agent" element={<CallCenterStandalone />} />
       
+      {/* Implemented Core Modules */}
+      <Route path="/drivers" element={
+        <ProtectedRoute>
+          <DriversManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/passengers" element={
+        <ProtectedRoute>
+          <PassengersManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/trips" element={
+        <ProtectedRoute>
+          <TripMonitoring />
+        </ProtectedRoute>
+      } />
+      <Route path="/wallet" element={
+        <ProtectedRoute>
+          <WalletTransactions />
+        </ProtectedRoute>
+      } />
+      <Route path="/notifications" element={
+        <ProtectedRoute>
+          <NotificationsManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/support" element={
+        <ProtectedRoute>
+          <SupportTickets />
+        </ProtectedRoute>
+      } />
+      
       {/* Placeholder routes for future pages */}
-      <Route path="/drivers" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Drivers Management - Coming Soon</h1></div></ProtectedRoute>} />
-      <Route path="/passengers" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Passengers Management - Coming Soon</h1></div></ProtectedRoute>} />
-      <Route path="/trips" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Trip Monitoring - Coming Soon</h1></div></ProtectedRoute>} />
-      <Route path="/wallet" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Wallet & Transactions - Coming Soon</h1></div></ProtectedRoute>} />
-      <Route path="/notifications" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Notifications - Coming Soon</h1></div></ProtectedRoute>} />
-      <Route path="/support" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Support Tickets - Coming Soon</h1></div></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Settings - Coming Soon</h1></div></ProtectedRoute>} />
       <Route path="/admin-roles" element={<ProtectedRoute><div className="p-8 text-center"><h1 className="text-2xl">Admin Roles - Coming Soon</h1></div></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
