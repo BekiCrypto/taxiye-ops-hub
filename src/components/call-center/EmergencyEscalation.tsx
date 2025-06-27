@@ -39,8 +39,8 @@ const EmergencyEscalation = ({ user, onStatsUpdate }: EmergencyEscalationProps) 
         .select(`
           *,
           support_tickets(subject, message, priority, driver_phone_ref),
-          call_center_users!escalated_by(name, email),
-          call_center_users!escalated_to(name, email)
+          escalated_by_user:call_center_users!escalated_by(name, email),
+          escalated_to_user:call_center_users!escalated_to(name, email)
         `)
         .order('created_at', { ascending: false });
 
@@ -287,7 +287,7 @@ const EmergencyEscalation = ({ user, onStatsUpdate }: EmergencyEscalationProps) 
                       <div>
                         <h4 className="font-medium">{escalation.support_tickets?.subject}</h4>
                         <p className="text-sm text-gray-600">
-                          Escalated by: {escalation.call_center_users?.name}
+                          Escalated by: {escalation.escalated_by_user?.name}
                         </p>
                       </div>
                       <Badge className={getStatusColor(escalation.status)}>
