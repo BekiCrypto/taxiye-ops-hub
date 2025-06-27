@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Users, Plus, Settings, TrendingUp, Shield, UserCheck, UserX } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -394,7 +395,7 @@ const AdminPanel = ({ user }: AdminPanelProps) => {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Performance Monitoring</CardHeader>
+              <CardTitle className="text-lg">Performance Monitoring</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
