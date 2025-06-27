@@ -1,63 +1,133 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Car, MapPin, Clock, User, Navigation } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface RideDispatchPanelProps {
   searchTerm: string;
 }
 
 const RideDispatchPanel = ({ searchTerm }: RideDispatchPanelProps) => {
-  const [pendingRides] = useState([
-    {
-      id: '1',
-      passengerName: 'John Doe',
-      phone: '+251911234567',
-      pickup: 'Bole International Airport',
-      destination: 'Hilton Hotel',
-      requestTime: '2 min ago',
-      estimatedFare: 120,
-      priority: 'normal',
-      status: 'waiting_assignment'
-    },
-    {
-      id: '2',
-      passengerName: 'Sarah Wilson',
-      phone: '+251922345678',
-      pickup: 'Merkato',
-      destination: 'Addis Ababa University',
-      requestTime: '5 min ago',
-      estimatedFare: 85,
-      priority: 'high',
-      status: 'searching_driver'
-    }
-  ]);
+  const { data: pendingRides = [], refetch: refetchRides } = useQuery({
+    queryKey: ['pending-rides'],
+    queryFn: async () => {
+      const { data: rides, error } = await supabase
+        .from('rides')
+        .select(`
+          *,
+          passengers!inner(name, phone)
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
 
-  const [availableDrivers] = useState([
-    {
-      id: '1',
-      name: 'Kebede Alemu',
-      phone: '+251944567890',
-      vehicle: 'Toyota Corolla - Blue',
-      plateNumber: 'AA-123-456',
-      rating: 4.8,
-      distance: '0.5 km away',
-      status: 'online'
+      if (error) {
+        console.error('Error fetching pending rides:', error);
+        return [];
+      }
+
+      return rides?.map(ride => ({
+        id: ride.id,
+        passengerName: ride.passengers?.name || ride.passenger_name || 'Unknown',
+        phone: ride.passengers?.phone || ride.passenger_phone || 'N/A',
+        pickup: ride.pickup_location,
+        destination: ride.dropoff_location,
+        requestTime: calculateTimeAgo(ride.created_at),
+        estimatedFare: ride.fare || 0,
+        priority: 'normal',
+        status: 'waiting_assignment'
+      })) || [];
     },
-    {
-      id: '2',
-      name: 'Meron Tadesse',
-      phone: '+251955678901',
-      vehicle: 'Hyundai Elantra - White',
-      plateNumber: 'AA-789-012',
-      rating: 4.9,
-      distance: '1.2 km away',
-      status: 'online'
+    refetchInterval: 5000
+  });
+
+  const { data: availableDrivers = [], refetch: refetchDrivers } = useQuery({
+    queryKey: ['available-drivers'],
+    queryFn: async () => {
+      const { data: drivers, error } = await supabase
+        .from('drivers')
+        .select('*')
+        .eq('is_online', true)
+        .eq('approved_status', 'approved')
+        .order('name');
+
+      if (error) {
+        console.error('Error fetching drivers:', error);
+        return [];
+      }
+
+      return drivers?.map(driver => ({
+        id: driver.phone,
+        name: driver.name,
+        phone: driver.phone,
+        vehicle: `${driver.vehicle_model || 'Vehicle'} - ${driver.vehicle_color || 'Color'}`,
+        plateNumber: driver.plate_number || 'N/A',
+        rating: 4.8, // This would come from a ratings table
+        distance: '0.5 km away', // This would come from location data
+        status: 'online',
+        walletBalance: driver.wallet_balance || 0
+      })) || [];
+    },
+    refetchInterval: 10000
+  });
+
+  const calculateTimeAgo = (createdAt: string) => {
+    const now = new Date();
+    const created = new Date(createdAt);
+    const diffInMinutes = Math.floor((now.getTime() - created.getTime()) / (1000 * 60));
+    return `${diffInMinutes} min ago`;
+  };
+
+  const handleAutoAssign = async (rideId: string) => {
+    if (availableDrivers.length === 0) {
+      alert('No available drivers');
+      return;
     }
-  ]);
+
+    try {
+      const randomDriver = availableDrivers[Math.floor(Math.random() * availableDrivers.length)];
+      
+      const { error } = await supabase
+        .from('rides')
+        .update({ 
+          driver_phone_ref: randomDriver.phone,
+          status: 'accepted'
+        })
+        .eq('id', rideId);
+
+      if (error) throw error;
+      
+      refetchRides();
+      refetchDrivers();
+      console.log('Ride auto-assigned to driver:', randomDriver.name);
+    } catch (error) {
+      console.error('Error auto-assigning ride:', error);
+    }
+  };
+
+  const handleManualAssign = async (rideId: string, driverPhone: string) => {
+    try {
+      const { error } = await supabase
+        .from('rides')
+        .update({ 
+          driver_phone_ref: driverPhone,
+          status: 'accepted'
+        })
+        .eq('id', rideId);
+
+      if (error) throw error;
+      
+      refetchRides();
+      refetchDrivers();
+      console.log('Ride manually assigned to driver:', driverPhone);
+    } catch (error) {
+      console.error('Error manually assigning ride:', error);
+    }
+  };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -111,17 +181,33 @@ const RideDispatchPanel = ({ searchTerm }: RideDispatchPanelProps) => {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button size="sm" className="flex-1">
+                  <Button 
+                    size="sm" 
+                    className="flex-1"
+                    onClick={() => handleAutoAssign(ride.id)}
+                    disabled={availableDrivers.length === 0}
+                  >
                     <Car className="w-4 h-4 mr-2" />
                     Auto Assign
                   </Button>
-                  <Button size="sm" variant="outline">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    disabled={availableDrivers.length === 0}
+                  >
                     Manual Assign
                   </Button>
                 </div>
               </CardContent>
             </Card>
           ))}
+
+          {pendingRides.length === 0 && (
+            <div className="text-center py-8">
+              <Car className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No pending rides at the moment</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -155,6 +241,7 @@ const RideDispatchPanel = ({ searchTerm }: RideDispatchPanelProps) => {
                       <span className="text-yellow-500">★</span>
                       <span className="text-sm font-medium">{driver.rating}</span>
                     </div>
+                    <p className="text-xs text-gray-500">ETB {driver.walletBalance}</p>
                   </div>
                 </div>
 
@@ -178,6 +265,13 @@ const RideDispatchPanel = ({ searchTerm }: RideDispatchPanelProps) => {
               </CardContent>
             </Card>
           ))}
+
+          {availableDrivers.length === 0 && (
+            <div className="text-center py-8">
+              <Car className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No available drivers online</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

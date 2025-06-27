@@ -5,52 +5,116 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CustomerSupportPanelProps {
   searchTerm: string;
 }
 
 const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
-  const [supportTickets] = useState([
-    {
-      id: '1',
-      customerName: 'John Doe',
-      phone: '+251911234567',
-      subject: 'Driver was late and rude',
-      category: 'complaint',
-      priority: 'high',
-      status: 'open',
-      createdAt: '10 min ago',
-      lastResponse: '5 min ago',
-      rideId: 'RIDE-001'
-    },
-    {
-      id: '2',
-      customerName: 'Sarah Wilson',
-      phone: '+251922345678',
-      subject: 'Unable to cancel ride',
-      category: 'technical',
-      priority: 'normal',
-      status: 'in_progress',
-      createdAt: '1 hour ago',
-      lastResponse: '30 min ago',
-      rideId: 'RIDE-002'
-    },
-    {
-      id: '3',
-      customerName: 'Ahmed Hassan',
-      phone: '+251933456789',
-      subject: 'Payment not processed',
-      category: 'billing',
-      priority: 'high',
-      status: 'waiting_customer',
-      createdAt: '2 hours ago',
-      lastResponse: '1 hour ago',
-      rideId: 'RIDE-003'
-    }
-  ]);
-
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
+  const [responseText, setResponseText] = useState('');
+
+  const { data: supportTickets = [], refetch } = useQuery({
+    queryKey: ['support-tickets'],
+    queryFn: async () => {
+      const { data: tickets, error } = await supabase
+        .from('support_tickets')
+        .select(`
+          *,
+          rides(pickup_location, dropoff_location),
+          drivers(name, phone)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching support tickets:', error);
+        return [];
+      }
+
+      return tickets?.map(ticket => ({
+        id: ticket.id,
+        customerName: ticket.drivers?.name || 'Unknown Customer',
+        phone: ticket.drivers?.phone || 'N/A',
+        subject: ticket.subject,
+        category: determineCategoryFromSubject(ticket.subject),
+        priority: ticket.status === 'open' ? 'high' : 'normal',
+        status: ticket.status || 'open',
+        createdAt: calculateTimeAgo(ticket.created_at),
+        lastResponse: calculateTimeAgo(ticket.updated_at),
+        rideId: ticket.ride_id || 'N/A',
+        message: ticket.message,
+        pickup: ticket.rides?.pickup_location,
+        destination: ticket.rides?.dropoff_location
+      })) || [];
+    },
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
+
+  const determineCategoryFromSubject = (subject: string) => {
+    const lowerSubject = subject.toLowerCase();
+    if (lowerSubject.includes('payment') || lowerSubject.includes('billing') || lowerSubject.includes('money')) {
+      return 'billing';
+    }
+    if (lowerSubject.includes('app') || lowerSubject.includes('technical') || lowerSubject.includes('bug')) {
+      return 'technical';
+    }
+    return 'complaint';
+  };
+
+  const calculateTimeAgo = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+    return `${Math.floor(diffInMinutes / 1440)} days ago`;
+  };
+
+  const handleUpdateTicketStatus = async (ticketId: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('support_tickets')
+        .update({ 
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', ticketId);
+
+      if (error) throw error;
+      refetch();
+      console.log('Ticket status updated:', newStatus);
+    } catch (error) {
+      console.error('Error updating ticket status:', error);
+    }
+  };
+
+  const handleSendResponse = async (ticketId: string) => {
+    if (!responseText.trim()) return;
+
+    try {
+      // In a real app, you'd store responses in a separate table
+      // For now, we'll just update the ticket status
+      const { error } = await supabase
+        .from('support_tickets')
+        .update({ 
+          status: 'in_progress',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', ticketId);
+
+      if (error) throw error;
+      
+      setResponseText('');
+      refetch();
+      console.log('Response sent for ticket:', ticketId);
+    } catch (error) {
+      console.error('Error sending response:', error);
+    }
+  };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -86,6 +150,8 @@ const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
     ticket.subject.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const selectedTicketData = supportTickets.find(t => t.id === selectedTicket);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Support Tickets List */}
@@ -93,6 +159,7 @@ const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-semibold">Support Tickets ({filteredTickets.length})</h2>
           <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => refetch()}>Refresh</Button>
             <Button size="sm" variant="outline">All</Button>
             <Button size="sm" variant="outline">Open</Button>
             <Button size="sm" variant="outline">High Priority</Button>
@@ -138,17 +205,24 @@ const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
                     <Clock className="w-3 h-3" />
                     Created: {ticket.createdAt}
                   </div>
-                  <span>Last response: {ticket.lastResponse}</span>
+                  <span>Last updated: {ticket.lastResponse}</span>
                 </div>
               </CardContent>
             </Card>
           ))}
+
+          {filteredTickets.length === 0 && (
+            <div className="text-center py-8">
+              <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No support tickets found</p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Ticket Details & Response */}
       <div className="space-y-4">
-        {selectedTicket ? (
+        {selectedTicketData ? (
           <>
             <Card>
               <CardHeader>
@@ -158,19 +232,28 @@ const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
                 <div>
                   <h4 className="font-medium mb-2">Customer Information</h4>
                   <div className="text-sm space-y-1 text-gray-600">
-                    <p>Name: John Doe</p>
-                    <p>Phone: +251911234567</p>
-                    <p>Ride ID: RIDE-001</p>
+                    <p>Name: {selectedTicketData.customerName}</p>
+                    <p>Phone: {selectedTicketData.phone}</p>
+                    <p>Ride ID: {selectedTicketData.rideId}</p>
                   </div>
                 </div>
 
                 <div>
                   <h4 className="font-medium mb-2">Issue Description</h4>
                   <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                    Driver arrived 15 minutes late and was very rude during the trip. 
-                    Customer is requesting a refund and wants to file a formal complaint.
+                    {selectedTicketData.message}
                   </p>
                 </div>
+
+                {selectedTicketData.pickup && (
+                  <div>
+                    <h4 className="font-medium mb-2">Trip Details</h4>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <p>From: {selectedTicketData.pickup}</p>
+                      <p>To: {selectedTicketData.destination}</p>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <h4 className="font-medium mb-2">Quick Actions</h4>
@@ -197,10 +280,17 @@ const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
                 <Textarea
                   placeholder="Type your response to the customer..."
                   rows={4}
+                  value={responseText}
+                  onChange={(e) => setResponseText(e.target.value)}
                 />
                 
                 <div className="flex gap-2">
-                  <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700">
+                  <Button 
+                    size="sm" 
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={() => handleSendResponse(selectedTicketData.id)}
+                    disabled={!responseText.trim()}
+                  >
                     Send Response
                   </Button>
                   <Button size="sm" variant="outline">
@@ -209,10 +299,20 @@ const CustomerSupportPanel = ({ searchTerm }: CustomerSupportPanelProps) => {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => handleUpdateTicketStatus(selectedTicketData.id, 'resolved')}
+                  >
                     Mark Resolved
                   </Button>
-                  <Button size="sm" variant="outline" className="flex-1">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => handleUpdateTicketStatus(selectedTicketData.id, 'closed')}
+                  >
                     Close Ticket
                   </Button>
                 </div>

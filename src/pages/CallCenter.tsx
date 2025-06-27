@@ -15,12 +15,12 @@ const CallCenter = () => {
   const [activeTab, setActiveTab] = useState<'calls' | 'dispatch' | 'support'>('calls');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Mock data for demonstration
-  const callStats = {
-    totalCalls: 47,
-    activeCalls: 8,
-    avgWaitTime: '2:34',
-    completedToday: 39
+  // Fallback stats for CallStats component (will be overridden by live data)
+  const fallbackStats = {
+    totalCalls: 0,
+    activeCalls: 0,
+    avgWaitTime: '0:00',
+    completedToday: 0
   };
 
   return (
@@ -46,8 +46,8 @@ const CallCenter = () => {
           </div>
         </div>
 
-        {/* Call Stats */}
-        <CallStats stats={callStats} />
+        {/* Call Stats - Now fetches live data */}
+        <CallStats stats={fallbackStats} />
 
         {/* Navigation Tabs */}
         <div className="border-b border-gray-200">
@@ -88,7 +88,7 @@ const CallCenter = () => {
           </nav>
         </div>
 
-        {/* Tab Content */}
+        {/* Tab Content - All panels now use live data */}
         <div className="min-h-[600px]">
           {activeTab === 'calls' && <ActiveCallsPanel searchTerm={searchTerm} />}
           {activeTab === 'dispatch' && <RideDispatchPanel searchTerm={searchTerm} />}

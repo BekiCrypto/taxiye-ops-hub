@@ -1,51 +1,88 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Phone, PhoneOff, Clock, User, MapPin, AlertTriangle } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ActiveCallsPanelProps {
   searchTerm: string;
 }
 
 const ActiveCallsPanel = ({ searchTerm }: ActiveCallsPanelProps) => {
-  // Mock active calls data
-  const [activeCalls] = useState([
-    {
-      id: '1',
-      callerName: 'John Doe',
-      phone: '+251911234567',
-      type: 'ride_request',
-      priority: 'normal',
-      duration: '02:34',
-      pickup: 'Bole International Airport',
-      destination: 'Hilton Hotel',
-      status: 'in_progress'
+  const { data: activeCalls = [], isLoading, refetch } = useQuery({
+    queryKey: ['active-calls'],
+    queryFn: async () => {
+      const { data: rides, error } = await supabase
+        .from('rides')
+        .select(`
+          *,
+          passengers!inner(name, phone)
+        `)
+        .in('status', ['pending', 'accepted', 'in_progress'])
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching active calls:', error);
+        return [];
+      }
+
+      return rides?.map(ride => ({
+        id: ride.id,
+        callerName: ride.passengers?.name || ride.passenger_name || 'Unknown',
+        phone: ride.passengers?.phone || ride.passenger_phone || 'N/A',
+        type: 'ride_request',
+        priority: ride.status === 'pending' ? 'high' : 'normal',
+        duration: calculateDuration(ride.created_at),
+        pickup: ride.pickup_location,
+        destination: ride.dropoff_location,
+        status: ride.status === 'pending' ? 'waiting' : ride.status === 'accepted' ? 'in_progress' : 'on_hold',
+        rideId: ride.id
+      })) || [];
     },
-    {
-      id: '2',
-      callerName: 'Sarah Wilson',
-      phone: '+251922345678',
-      type: 'complaint',
-      priority: 'high',
-      duration: '01:12',
-      pickup: 'Merkato',
-      destination: 'Addis Ababa University',
-      status: 'waiting'
-    },
-    {
-      id: '3',
-      callerName: 'Ahmed Hassan',
-      phone: '+251933456789',
-      type: 'support',
-      priority: 'low',
-      duration: '00:45',
-      pickup: 'Churchill Avenue',
-      destination: 'Mexico Square',
-      status: 'on_hold'
+    refetchInterval: 5000 // Refresh every 5 seconds
+  });
+
+  const calculateDuration = (createdAt: string) => {
+    const now = new Date();
+    const created = new Date(createdAt);
+    const diffInMinutes = Math.floor((now.getTime() - created.getTime()) / (1000 * 60));
+    const hours = Math.floor(diffInMinutes / 60);
+    const minutes = diffInMinutes % 60;
+    return hours > 0 ? `${hours}:${minutes.toString().padStart(2, '0')}` : `${minutes}:00`;
+  };
+
+  const handleAnswerCall = async (rideId: string) => {
+    try {
+      const { error } = await supabase
+        .from('rides')
+        .update({ status: 'accepted' })
+        .eq('id', rideId);
+
+      if (error) throw error;
+      refetch();
+      console.log('Call answered for ride:', rideId);
+    } catch (error) {
+      console.error('Error answering call:', error);
     }
-  ]);
+  };
+
+  const handleEndCall = async (rideId: string) => {
+    try {
+      const { error } = await supabase
+        .from('rides')
+        .update({ status: 'cancelled' })
+        .eq('id', rideId);
+
+      if (error) throw error;
+      refetch();
+      console.log('Call ended for ride:', rideId);
+    } catch (error) {
+      console.error('Error ending call:', error);
+    }
+  };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -72,14 +109,35 @@ const ActiveCallsPanel = ({ searchTerm }: ActiveCallsPanelProps) => {
     call.destination.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-lg font-semibold">Active Calls (Loading...)</h2>
+        </div>
+        <div className="grid gap-4">
+          {[...Array(3)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-4">
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">Active Calls ({filteredCalls.length})</h2>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
             <Phone className="w-4 h-4 mr-2" />
-            Answer Queue
+            Refresh
           </Button>
         </div>
       </div>
@@ -104,18 +162,16 @@ const ActiveCallsPanel = ({ searchTerm }: ActiveCallsPanelProps) => {
                     </Badge>
                   </div>
 
-                  {call.type === 'ride_request' && (
-                    <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        From: {call.pickup}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        To: {call.destination}
-                      </div>
+                  <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-green-600" />
+                      From: {call.pickup}
                     </div>
-                  )}
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-red-600" />
+                      To: {call.destination}
+                    </div>
+                  </div>
 
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     <Clock className="w-3 h-3" />
@@ -126,13 +182,23 @@ const ActiveCallsPanel = ({ searchTerm }: ActiveCallsPanelProps) => {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                  <Button 
+                    size="sm" 
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={() => handleAnswerCall(call.rideId)}
+                    disabled={call.status === 'in_progress'}
+                  >
                     <Phone className="w-4 h-4" />
                   </Button>
                   <Button size="sm" variant="outline">
                     Hold
                   </Button>
-                  <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => handleEndCall(call.rideId)}
+                  >
                     <PhoneOff className="w-4 h-4" />
                   </Button>
                 </div>
@@ -142,7 +208,7 @@ const ActiveCallsPanel = ({ searchTerm }: ActiveCallsPanelProps) => {
         ))}
       </div>
 
-      {filteredCalls.length === 0 && (
+      {filteredCalls.length === 0 && !isLoading && (
         <div className="text-center py-12">
           <Phone className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-600 mb-2">No Active Calls</h3>
