@@ -10,7 +10,7 @@ interface CallCenterUser {
   role: 'agent' | 'supervisor' | 'admin';
   is_active: boolean;
   user_id: string;
-  created_at?: string;
+  created_at: string;
   updated_at?: string;
 }
 
@@ -24,10 +24,11 @@ const CallCenterStandalone = () => {
     if (savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser);
-        // Ensure user_id is present
+        // Ensure user_id and created_at are present
         const userWithId = {
           ...parsedUser,
-          user_id: parsedUser.user_id || parsedUser.id
+          user_id: parsedUser.user_id || parsedUser.id,
+          created_at: parsedUser.created_at || new Date().toISOString()
         };
         setUser(userWithId);
       } catch (error) {

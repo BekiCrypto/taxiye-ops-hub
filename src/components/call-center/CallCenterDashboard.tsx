@@ -30,7 +30,7 @@ interface CallCenterUser {
   role: 'agent' | 'supervisor' | 'admin';
   is_active: boolean;
   user_id: string;
-  created_at?: string;
+  created_at: string;
   updated_at?: string;
 }
 

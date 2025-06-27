@@ -15,7 +15,7 @@ interface CallCenterUser {
   role: 'agent' | 'supervisor' | 'admin';
   is_active: boolean;
   user_id: string;
-  created_at?: string;
+  created_at: string;
   updated_at?: string;
 }
 
@@ -67,10 +67,11 @@ const CallCenterAuth = ({ onLogin }: CallCenterAuthProps) => {
       // Store in localStorage for session persistence
       localStorage.setItem('call_center_user', JSON.stringify(callCenterUser));
       
-      // Ensure user_id is present for the interface
+      // Ensure user_id and created_at are present for the interface
       const userWithId = {
         ...callCenterUser,
-        user_id: callCenterUser.id // Use the id as user_id if not present
+        user_id: callCenterUser.id,
+        created_at: callCenterUser.created_at || new Date().toISOString()
       };
       
       onLogin(userWithId);
